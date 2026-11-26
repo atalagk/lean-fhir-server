@@ -1,0 +1,13 @@
+{
+  "resourceType": "Patient",
+  "meta": {"profile": ["http://example.org/StructureDefinition/demo-patient"], "tag": [{"system": "http://example.org/tags", "code": "synthetic"}]},
+  "extension": [{"url": "http://example.org/StructureDefinition/ethnicity", "valueCodeableConcept": {"coding": [{"system": "http://example.org/ethnicity", "code": "x1"}]}}],
+  "identifier": [{"system": "https://example.org/mrn", "value": "MRN-0001"}],
+  "active": true,
+  "name": [{"use": "official", "family": "Smith", "given": ["Jane", "Q"], "_given": [null, {"extension": [{"url": "http://hl7.org/fhir/StructureDefinition/iso21090-EN-qualifier", "valueCode": "IN"}]}]}],
+  "telecom": [{"system": "phone", "value": "+64 21 000 0000"}],
+  "gender": "female",
+  "birthDate": "1975-06-30",
+  "_birthDate": {"extension": [{"url": "http://hl7.org/fhir/StructureDefinition/patient-birthTime", "valueDateTime": "1975-06-30T14:35:00+12:00"}]},
+  "address": [{"city": "Auckland", "country": "NZ"}]
+}

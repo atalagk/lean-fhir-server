@@ -1,0 +1,12 @@
+services:
+  leanfhir:
+    build: .
+    image: leanfhir:0.1.0
+    ports:
+      - "${PORT:-8000}:8000"
+    volumes:
+      - leanfhir-data:/data
+    restart: unless-stopped
+
+volumes:
+  leanfhir-data:
