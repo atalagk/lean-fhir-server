@@ -1,0 +1,34 @@
+meta {
+  name: Update Patient (If-Match stale, expect 412)
+  type: http
+  seq: 3
+}
+
+put {
+  url: {{baseUrl}}/Patient/{{patientId}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/fhir+json
+  If-Match: W/"1"
+}
+
+body:json {
+  {
+    "resourceType": "Patient",
+    "id": "{{patientId}}",
+    "identifier": [
+      { "system": "urn:leanfhir:test:mrn", "value": "MRN-{{runId}}" }
+    ],
+    "name": [
+      { "family": "ShouldNotBeStored" }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 412
+  res.body.resourceType: eq OperationOutcome
+}

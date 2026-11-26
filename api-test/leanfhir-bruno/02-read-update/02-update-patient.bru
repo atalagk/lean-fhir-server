@@ -1,0 +1,47 @@
+meta {
+  name: Update Patient (If-Match current)
+  type: http
+  seq: 2
+}
+
+put {
+  url: {{baseUrl}}/Patient/{{patientId}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/fhir+json
+  If-Match: W/"1"
+}
+
+body:json {
+  {
+    "resourceType": "Patient",
+    "id": "{{patientId}}",
+    "identifier": [
+      { "system": "urn:leanfhir:test:mrn", "value": "MRN-{{runId}}" }
+    ],
+    "active": true,
+    "name": [
+      { "family": "Smithson", "given": ["Jane", "Marie"] }
+    ],
+    "gender": "female",
+    "birthDate": "1980-05-17",
+    "managingOrganization": { "reference": "Organization/{{orgId}}" },
+    "generalPractitioner": [
+      { "reference": "Practitioner/{{practitionerId}}" }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.meta.versionId: eq "2"
+}
+
+tests {
+  test("ETag is version 2", function () {
+    expect(res.getHeader("etag")).to.equal('W/"2"');
+  });
+}

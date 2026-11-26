@@ -1,0 +1,34 @@
+meta {
+  name: Structurally invalid Patient (expect 422)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/Patient
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/fhir+json
+}
+
+body:json {
+  {
+    "resourceType": "Patient",
+    "gender": 5,
+    "notAFhirElement": "x"
+  }
+}
+
+assert {
+  res.status: eq 422
+  res.body.resourceType: eq OperationOutcome
+}
+
+tests {
+  test("at least one issue is reported", function () {
+    expect(res.getBody().issue.length).to.be.at.least(1);
+  });
+}

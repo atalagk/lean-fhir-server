@@ -1,0 +1,31 @@
+meta {
+  name: CapabilityStatement
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/metadata
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.resourceType: eq CapabilityStatement
+  res.body.fhirVersion: eq 4.0.1
+}
+
+tests {
+  test("lists exactly the six supported types", function () {
+    const types = res.getBody().rest[0].resource.map((r) => r.type).sort();
+    expect(types).to.eql([
+      "Encounter",
+      "Location",
+      "Organization",
+      "Patient",
+      "Practitioner",
+      "PractitionerRole",
+    ]);
+  });
+}

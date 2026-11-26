@@ -1,0 +1,37 @@
+meta {
+  name: Create Location
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/Location
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/fhir+json
+}
+
+body:json {
+  {
+    "resourceType": "Location",
+    "identifier": [
+      { "system": "urn:leanfhir:test:loc", "value": "LOC-{{runId}}" }
+    ],
+    "status": "active",
+    "name": "Consult Room 1",
+    "managingOrganization": { "reference": "Organization/{{orgId}}" }
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.resourceType: eq Location
+  res.body.meta.versionId: eq "1"
+}
+
+script:post-response {
+  bru.setVar("locationId", res.getBody().id);
+}

@@ -1,0 +1,15 @@
+meta {
+  name: Delete Encounter
+  type: http
+  seq: 1
+}
+
+delete {
+  url: {{baseUrl}}/Encounter/{{encounterId}}
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 204
+}

@@ -1,0 +1,26 @@
+meta {
+  name: Unknown search parameter (expect 400)
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/Patient?favourite-colour=blue
+  body: none
+  auth: none
+}
+
+params:query {
+  favourite-colour: blue
+}
+
+assert {
+  res.status: eq 400
+  res.body.resourceType: eq OperationOutcome
+}
+
+tests {
+  test("OperationOutcome names the parameter", function () {
+    expect(JSON.stringify(res.getBody())).to.contain("favourite-colour");
+  });
+}

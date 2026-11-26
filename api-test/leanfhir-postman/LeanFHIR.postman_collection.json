@@ -1,0 +1,1168 @@
+{
+  "info": {
+    "_postman_id": "7eb735d7-56ca-5129-bc4c-a95b7034f608",
+    "name": "LeanFHIR",
+    "description": "Smoke-test collection for the LeanFHIR server (SPEC v0.1). Synthetic data only. Run the folders in order; 02 onwards depend on 01-create. See README.md next to this file.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "00-meta",
+      "description": "Health (F8), CapabilityStatement (F7).",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{healthUrl}}",
+              "host": [
+                "{{healthUrl}}"
+              ],
+              "path": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"status ok\", () => pm.expect(pm.response.json().status).to.eql(\"ok\"));"
+                ]
+              }
+            }
+          ],
+          "id": "d8a7e293-9302-5054-b8d4-360948150cf5"
+        },
+        {
+          "name": "CapabilityStatement",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/metadata",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "metadata"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"resourceType CapabilityStatement\", () => pm.expect(pm.response.json().resourceType).to.eql(\"CapabilityStatement\"));",
+                  "const cs = pm.response.json();",
+                  "pm.test(\"fhirVersion 4.0.1\", () => pm.expect(cs.fhirVersion).to.eql(\"4.0.1\"));",
+                  "pm.test(\"lists exactly the six supported types\", () => {",
+                  "  const types = cs.rest[0].resource.map((r) => r.type).sort();",
+                  "  pm.expect(types).to.eql([\"Encounter\", \"Location\", \"Organization\", \"Patient\", \"Practitioner\", \"PractitionerRole\"]);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "id": "08de6664-4cf7-58b6-a8b0-e5b0b7b8c256"
+        }
+      ],
+      "id": "439aae72-fd63-5fa0-8e4e-ae542bd41e00"
+    },
+    {
+      "name": "01-create",
+      "description": "Create all six types in reference order (F2, F11). Sets runId and the id variables.",
+      "item": [
+        {
+          "name": "Create Organization",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/fhir+json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/Organization",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "Organization"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resourceType\": \"Organization\",\n  \"identifier\": [\n    {\n      \"system\": \"urn:leanfhir:test:org\",\n      \"value\": \"ORG-{{runId}}\"\n    }\n  ],\n  \"active\": true,\n  \"name\": \"Test Clinic {{runId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// New run id per run: keeps identifiers unique so data from earlier runs",
+                  "// does not affect the conditional-create and search checks.",
+                  "pm.collectionVariables.set(\"runId\", String(Date.now()));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"resourceType Organization\", () => pm.expect(pm.response.json().resourceType).to.eql(\"Organization\"));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"meta.versionId is \\\"1\\\"\", () => pm.expect(body.meta.versionId).to.eql(\"1\"));",
+                  "pm.test(\"ETag is W/\\\"1\\\"\", () => pm.expect(pm.response.headers.get(\"ETag\")).to.eql('W/\"1\"'));",
+                  "pm.test(\"Location points at the new resource\", () => pm.expect(pm.response.headers.get(\"Location\")).to.include(\"/Organization/\" + body.id));",
+                  "pm.collectionVariables.set(\"orgId\", body.id);"
+                ]
+              }
+            }
+          ],
+          "id": "ec73212a-745d-5b56-955b-250789b91fba"
+        },
+        {
+          "name": "Create Location",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/fhir+json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/Location",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "Location"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resourceType\": \"Location\",\n  \"identifier\": [\n    {\n      \"system\": \"urn:leanfhir:test:loc\",\n      \"value\": \"LOC-{{runId}}\"\n    }\n  ],\n  \"status\": \"active\",\n  \"name\": \"Consult Room 1\",\n  \"managingOrganization\": {\n    \"reference\": \"Organization/{{orgId}}\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"resourceType Location\", () => pm.expect(pm.response.json().resourceType).to.eql(\"Location\"));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"meta.versionId is \\\"1\\\"\", () => pm.expect(body.meta.versionId).to.eql(\"1\"));",
+                  "pm.test(\"ETag is W/\\\"1\\\"\", () => pm.expect(pm.response.headers.get(\"ETag\")).to.eql('W/\"1\"'));",
+                  "pm.test(\"Location points at the new resource\", () => pm.expect(pm.response.headers.get(\"Location\")).to.include(\"/Location/\" + body.id));",
+                  "pm.collectionVariables.set(\"locationId\", body.id);"
+                ]
+              }
+            }
+          ],
+          "id": "7480c793-f247-57a6-9806-496f9a93f7db"
+        },
+        {
+          "name": "Create Practitioner",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/fhir+json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/Practitioner",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "Practitioner"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resourceType\": \"Practitioner\",\n  \"identifier\": [\n    {\n      \"system\": \"urn:leanfhir:test:prac\",\n      \"value\": \"PRAC-{{runId}}\"\n    }\n  ],\n  \"active\": true,\n  \"name\": [\n    {\n      \"family\": \"Testdoc\",\n      \"given\": [\n        \"Alex\"\n      ],\n      \"prefix\": [\n        \"Dr\"\n      ]\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"resourceType Practitioner\", () => pm.expect(pm.response.json().resourceType).to.eql(\"Practitioner\"));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"meta.versionId is \\\"1\\\"\", () => pm.expect(body.meta.versionId).to.eql(\"1\"));",
+                  "pm.test(\"ETag is W/\\\"1\\\"\", () => pm.expect(pm.response.headers.get(\"ETag\")).to.eql('W/\"1\"'));",
+                  "pm.test(\"Location points at the new resource\", () => pm.expect(pm.response.headers.get(\"Location\")).to.include(\"/Practitioner/\" + body.id));",
+                  "pm.collectionVariables.set(\"practitionerId\", body.id);"
+                ]
+              }
+            }
+          ],
+          "id": "000228d9-b354-5d58-b299-0322273f7823"
+        },
+        {
+          "name": "Create PractitionerRole",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/fhir+json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/PractitionerRole",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "PractitionerRole"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resourceType\": \"PractitionerRole\",\n  \"active\": true,\n  \"practitioner\": {\n    \"reference\": \"Practitioner/{{practitionerId}}\"\n  },\n  \"organization\": {\n    \"reference\": \"Organization/{{orgId}}\"\n  },\n  \"location\": [\n    {\n      \"reference\": \"Location/{{locationId}}\"\n    }\n  ],\n  \"code\": [\n    {\n      \"coding\": [\n        {\n          \"system\": \"http://terminology.hl7.org/CodeSystem/practitioner-role\",\n          \"code\": \"doctor\"\n        }\n      ]\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"resourceType PractitionerRole\", () => pm.expect(pm.response.json().resourceType).to.eql(\"PractitionerRole\"));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"meta.versionId is \\\"1\\\"\", () => pm.expect(body.meta.versionId).to.eql(\"1\"));",
+                  "pm.test(\"ETag is W/\\\"1\\\"\", () => pm.expect(pm.response.headers.get(\"ETag\")).to.eql('W/\"1\"'));",
+                  "pm.test(\"Location points at the new resource\", () => pm.expect(pm.response.headers.get(\"Location\")).to.include(\"/PractitionerRole/\" + body.id));",
+                  "pm.collectionVariables.set(\"practitionerRoleId\", body.id);"
+                ]
+              }
+            }
+          ],
+          "id": "9f75ca96-5179-58f3-9393-6b2a6055263e"
+        },
+        {
+          "name": "Create Patient",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/fhir+json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/Patient",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "Patient"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resourceType\": \"Patient\",\n  \"identifier\": [\n    {\n      \"system\": \"urn:leanfhir:test:mrn\",\n      \"value\": \"MRN-{{runId}}\"\n    }\n  ],\n  \"active\": true,\n  \"name\": [\n    {\n      \"family\": \"Smithson\",\n      \"given\": [\n        \"Jane\"\n      ]\n    }\n  ],\n  \"gender\": \"female\",\n  \"birthDate\": \"1980-05-17\",\n  \"managingOrganization\": {\n    \"reference\": \"Organization/{{orgId}}\"\n  },\n  \"generalPractitioner\": [\n    {\n      \"reference\": \"Practitioner/{{practitionerId}}\"\n    }\n  ],\n  \"id\": \"client-supplied-id-must-be-ignored\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"resourceType Patient\", () => pm.expect(pm.response.json().resourceType).to.eql(\"Patient\"));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"meta.versionId is \\\"1\\\"\", () => pm.expect(body.meta.versionId).to.eql(\"1\"));",
+                  "pm.test(\"ETag is W/\\\"1\\\"\", () => pm.expect(pm.response.headers.get(\"ETag\")).to.eql('W/\"1\"'));",
+                  "pm.test(\"Location points at the new resource\", () => pm.expect(pm.response.headers.get(\"Location\")).to.include(\"/Patient/\" + body.id));",
+                  "pm.test(\"client-supplied id is ignored\", () => pm.expect(body.id).to.not.eql(\"client-supplied-id-must-be-ignored\"));",
+                  "pm.test(\"server-assigned id is a UUID v4\", () => pm.expect(body.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/));",
+                  "pm.collectionVariables.set(\"patientId\", body.id);"
+                ]
+              }
+            }
+          ],
+          "id": "fe3dfff1-2b3e-5e7f-b3e2-8f350a69e0c2"
+        },
+        {
+          "name": "Create Encounter",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/fhir+json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/Encounter",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "Encounter"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resourceType\": \"Encounter\",\n  \"identifier\": [\n    {\n      \"system\": \"urn:leanfhir:test:enc\",\n      \"value\": \"ENC-{{runId}}\"\n    }\n  ],\n  \"status\": \"finished\",\n  \"class\": {\n    \"system\": \"http://terminology.hl7.org/CodeSystem/v3-ActCode\",\n    \"code\": \"AMB\"\n  },\n  \"subject\": {\n    \"reference\": \"Patient/{{patientId}}\"\n  },\n  \"participant\": [\n    {\n      \"individual\": {\n        \"reference\": \"Practitioner/{{practitionerId}}\"\n      }\n    }\n  ],\n  \"period\": {\n    \"start\": \"2026-11-20T09:00:00Z\",\n    \"end\": \"2026-11-20T09:30:00Z\"\n  },\n  \"location\": [\n    {\n      \"location\": {\n        \"reference\": \"Location/{{locationId}}\"\n      }\n    }\n  ],\n  \"serviceProvider\": {\n    \"reference\": \"Organization/{{orgId}}\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"resourceType Encounter\", () => pm.expect(pm.response.json().resourceType).to.eql(\"Encounter\"));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"meta.versionId is \\\"1\\\"\", () => pm.expect(body.meta.versionId).to.eql(\"1\"));",
+                  "pm.test(\"ETag is W/\\\"1\\\"\", () => pm.expect(pm.response.headers.get(\"ETag\")).to.eql('W/\"1\"'));",
+                  "pm.test(\"Location points at the new resource\", () => pm.expect(pm.response.headers.get(\"Location\")).to.include(\"/Encounter/\" + body.id));",
+                  "pm.collectionVariables.set(\"encounterId\", body.id);"
+                ]
+              }
+            }
+          ],
+          "id": "9fdaceb9-a1a8-51bc-9cd2-83cfeeef63f7"
+        }
+      ],
+      "id": "19107003-e326-56e8-8568-ba477886f6fb"
+    },
+    {
+      "name": "02-read-update",
+      "description": "Read (F1); update with If-Match current and stale (F4).",
+      "item": [
+        {
+          "name": "Read Patient",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/Patient/{{patientId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "Patient",
+                "{{patientId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"resourceType Patient\", () => pm.expect(pm.response.json().resourceType).to.eql(\"Patient\"));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"id matches\", () => pm.expect(body.id).to.eql(pm.collectionVariables.get(\"patientId\")));",
+                  "pm.test(\"birthDate\", () => pm.expect(body.birthDate).to.eql(\"1980-05-17\"));",
+                  "pm.test(\"content type is FHIR JSON\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/fhir+json\"));",
+                  "pm.test(\"ETag and Last-Modified are present\", () => {",
+                  "  pm.expect(pm.response.headers.get(\"ETag\")).to.eql('W/\"1\"');",
+                  "  pm.expect(pm.response.headers.get(\"Last-Modified\")).to.be.a(\"string\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "id": "65255e9d-ef29-599b-bcd0-3a63467b41bc"
+        },
+        {
+          "name": "Update Patient (If-Match current)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/fhir+json"
+              },
+              {
+                "key": "If-Match",
+                "value": "W/\"1\""
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/Patient/{{patientId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "Patient",
+                "{{patientId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resourceType\": \"Patient\",\n  \"identifier\": [\n    {\n      \"system\": \"urn:leanfhir:test:mrn\",\n      \"value\": \"MRN-{{runId}}\"\n    }\n  ],\n  \"active\": true,\n  \"name\": [\n    {\n      \"family\": \"Smithson\",\n      \"given\": [\n        \"Jane\",\n        \"Marie\"\n      ]\n    }\n  ],\n  \"gender\": \"female\",\n  \"birthDate\": \"1980-05-17\",\n  \"managingOrganization\": {\n    \"reference\": \"Organization/{{orgId}}\"\n  },\n  \"generalPractitioner\": [\n    {\n      \"reference\": \"Practitioner/{{practitionerId}}\"\n    }\n  ],\n  \"id\": \"{{patientId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"resourceType Patient\", () => pm.expect(pm.response.json().resourceType).to.eql(\"Patient\"));",
+                  "pm.test(\"meta.versionId is \\\"2\\\"\", () => pm.expect(pm.response.json().meta.versionId).to.eql(\"2\"));",
+                  "pm.test(\"ETag is W/\\\"2\\\"\", () => pm.expect(pm.response.headers.get(\"ETag\")).to.eql('W/\"2\"'));"
+                ]
+              }
+            }
+          ],
+          "id": "443945e7-7047-5c22-8a06-0085d8666fe5"
+        },
+        {
+          "name": "Update Patient (If-Match stale, expect 412)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/fhir+json"
+              },
+              {
+                "key": "If-Match",
+                "value": "W/\"1\""
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/Patient/{{patientId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "Patient",
+                "{{patientId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resourceType\": \"Patient\",\n  \"id\": \"{{patientId}}\",\n  \"identifier\": [\n    {\n      \"system\": \"urn:leanfhir:test:mrn\",\n      \"value\": \"MRN-{{runId}}\"\n    }\n  ],\n  \"name\": [\n    {\n      \"family\": \"ShouldNotBeStored\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 412\", () => pm.response.to.have.status(412));",
+                  "pm.test(\"resourceType OperationOutcome\", () => pm.expect(pm.response.json().resourceType).to.eql(\"OperationOutcome\"));"
+                ]
+              }
+            }
+          ],
+          "id": "3297f6bf-868b-5666-a902-f6eb86aa928a"
+        }
+      ],
+      "id": "0514e503-30b1-5308-a6ab-2b0b00c78dbc"
+    },
+    {
+      "name": "03-search",
+      "description": "Token, string, date and reference search; unknown parameter gives 400 (F6).",
+      "item": [
+        {
+          "name": "Patient by identifier (token)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/Patient?identifier=urn:leanfhir:test:mrn|MRN-{{runId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "Patient"
+              ],
+              "query": [
+                {
+                  "key": "identifier",
+                  "value": "urn:leanfhir:test:mrn|MRN-{{runId}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"resourceType Bundle\", () => pm.expect(pm.response.json().resourceType).to.eql(\"Bundle\"));",
+                  "const b = pm.response.json();",
+                  "pm.test(\"searchset with one match\", () => {",
+                  "  pm.expect(b.type).to.eql(\"searchset\");",
+                  "  pm.expect(b.total).to.eql(1);",
+                  "  pm.expect(b.entry[0].resource.id).to.eql(pm.collectionVariables.get(\"patientId\"));",
+                  "  pm.expect(b.entry[0].search.mode).to.eql(\"match\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "id": "2108b3bc-f21a-5a66-8e52-2deb645e8297"
+        },
+        {
+          "name": "Patient by family (string, starts-with, case-insensitive)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/Patient?family=smi&_count=200",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "Patient"
+              ],
+              "query": [
+                {
+                  "key": "family",
+                  "value": "smi"
+                },
+                {
+                  "key": "_count",
+                  "value": "200"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"resourceType Bundle\", () => pm.expect(pm.response.json().resourceType).to.eql(\"Bundle\"));",
+                  "pm.test(\"this run's patient is in the results\", () => {",
+                  "  const ids = (pm.response.json().entry || []).map((e) => e.resource.id);",
+                  "  pm.expect(ids).to.include(pm.collectionVariables.get(\"patientId\"));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "id": "6b09c6c1-38e6-5d14-9a0c-8b654658f356"
+        },
+        {
+          "name": "Patient by birthdate (date, year precision) AND identifier",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/Patient?birthdate=1980&identifier=urn:leanfhir:test:mrn|MRN-{{runId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "Patient"
+              ],
+              "query": [
+                {
+                  "key": "birthdate",
+                  "value": "1980"
+                },
+                {
+                  "key": "identifier",
+                  "value": "urn:leanfhir:test:mrn|MRN-{{runId}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"resourceType Bundle\", () => pm.expect(pm.response.json().resourceType).to.eql(\"Bundle\"));",
+                  "const b = pm.response.json();",
+                  "pm.test(\"one match\", () => {",
+                  "  pm.expect(b.total).to.eql(1);",
+                  "  pm.expect(b.entry[0].resource.id).to.eql(pm.collectionVariables.get(\"patientId\"));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "id": "51b592d3-589d-5957-a415-ab578ad6753a"
+        },
+        {
+          "name": "Encounter by patient (reference)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/Encounter?patient=Patient/{{patientId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "Encounter"
+              ],
+              "query": [
+                {
+                  "key": "patient",
+                  "value": "Patient/{{patientId}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"resourceType Bundle\", () => pm.expect(pm.response.json().resourceType).to.eql(\"Bundle\"));",
+                  "const b = pm.response.json();",
+                  "pm.test(\"one match\", () => {",
+                  "  pm.expect(b.total).to.eql(1);",
+                  "  pm.expect(b.entry[0].resource.id).to.eql(pm.collectionVariables.get(\"encounterId\"));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "id": "2c228e0a-8875-55ef-b65d-aa899e45a8ee"
+        },
+        {
+          "name": "Unknown search parameter (expect 400)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/Patient?favourite-colour=blue",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "Patient"
+              ],
+              "query": [
+                {
+                  "key": "favourite-colour",
+                  "value": "blue"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"resourceType OperationOutcome\", () => pm.expect(pm.response.json().resourceType).to.eql(\"OperationOutcome\"));",
+                  "pm.test(\"OperationOutcome names the parameter\", () => pm.expect(pm.response.text()).to.include(\"favourite-colour\"));"
+                ]
+              }
+            }
+          ],
+          "id": "db552d80-e9c3-5667-8fe7-7aba3affc58e"
+        }
+      ],
+      "id": "2eedd7df-ed10-5b10-80d7-30105866242c"
+    },
+    {
+      "name": "04-conditional-errors",
+      "description": "Conditional create (F3), unresolved reference 422 (F9), invalid structure 422 (F10), delete blocked 409 (F9).",
+      "item": [
+        {
+          "name": "Conditional create, one match (expect 200, nothing written)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/fhir+json"
+              },
+              {
+                "key": "If-None-Exist",
+                "value": "identifier=urn:leanfhir:test:mrn|MRN-{{runId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/Patient",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "Patient"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resourceType\": \"Patient\",\n  \"identifier\": [\n    {\n      \"system\": \"urn:leanfhir:test:mrn\",\n      \"value\": \"MRN-{{runId}}\"\n    }\n  ],\n  \"name\": [\n    {\n      \"family\": \"ShouldNotBeCreated\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"resourceType Patient\", () => pm.expect(pm.response.json().resourceType).to.eql(\"Patient\"));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"returns the existing patient unchanged\", () => {",
+                  "  pm.expect(body.id).to.eql(pm.collectionVariables.get(\"patientId\"));",
+                  "  pm.expect(body.meta.versionId).to.eql(\"2\");",
+                  "  pm.expect(body.name[0].family).to.eql(\"Smithson\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "id": "c16e2e43-a36d-5111-9ce7-fb2df0005d5a"
+        },
+        {
+          "name": "Encounter with unresolved subject (expect 422)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/fhir+json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/Encounter",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "Encounter"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resourceType\": \"Encounter\",\n  \"status\": \"planned\",\n  \"class\": {\n    \"system\": \"http://terminology.hl7.org/CodeSystem/v3-ActCode\",\n    \"code\": \"AMB\"\n  },\n  \"subject\": {\n    \"reference\": \"Patient/does-not-exist-{{runId}}\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"resourceType OperationOutcome\", () => pm.expect(pm.response.json().resourceType).to.eql(\"OperationOutcome\"));"
+                ]
+              }
+            }
+          ],
+          "id": "df85c421-b336-5d4f-ab47-22c7a0488815"
+        },
+        {
+          "name": "Structurally invalid Patient (expect 422)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/fhir+json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/Patient",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "Patient"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resourceType\": \"Patient\",\n  \"gender\": 5,\n  \"notAFhirElement\": \"x\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"resourceType OperationOutcome\", () => pm.expect(pm.response.json().resourceType).to.eql(\"OperationOutcome\"));",
+                  "pm.test(\"at least one issue is reported\", () => pm.expect(pm.response.json().issue.length).to.be.at.least(1));"
+                ]
+              }
+            }
+          ],
+          "id": "04a1cd47-cf08-546b-87c9-88e5f243b064"
+        },
+        {
+          "name": "Delete Patient referenced by Encounter (expect 409)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/Patient/{{patientId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "Patient",
+                "{{patientId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"resourceType OperationOutcome\", () => pm.expect(pm.response.json().resourceType).to.eql(\"OperationOutcome\"));"
+                ]
+              }
+            }
+          ],
+          "id": "80481053-191d-5dbd-9abd-1bc709dc5841"
+        }
+      ],
+      "id": "9bb18beb-3030-5ce1-90b0-382a9f268726"
+    },
+    {
+      "name": "99-cleanup",
+      "description": "Delete in reverse reference order (F5), then read gives 404.",
+      "item": [
+        {
+          "name": "Delete Encounter",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/Encounter/{{encounterId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "Encounter",
+                "{{encounterId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "id": "9fe7d7be-ef60-5fe6-8295-02680ed54d10"
+        },
+        {
+          "name": "Delete PractitionerRole",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/PractitionerRole/{{practitionerRoleId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "PractitionerRole",
+                "{{practitionerRoleId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "id": "abfc089b-dee1-5ac7-8256-ccf54732ad4f"
+        },
+        {
+          "name": "Delete Patient",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/Patient/{{patientId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "Patient",
+                "{{patientId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "id": "e0aec8e2-20d6-5202-ab89-298b4f23c7e9"
+        },
+        {
+          "name": "Delete Practitioner",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/Practitioner/{{practitionerId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "Practitioner",
+                "{{practitionerId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "id": "dd725e36-b43d-5da4-bb19-9660a84b6fff"
+        },
+        {
+          "name": "Delete Location",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/Location/{{locationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "Location",
+                "{{locationId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "id": "26cbedd9-e4d6-542b-9c2c-35a28cf784d2"
+        },
+        {
+          "name": "Delete Organization",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/Organization/{{orgId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "Organization",
+                "{{orgId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "id": "925ada8d-c71f-5637-9697-050e509b4e0a"
+        },
+        {
+          "name": "Read deleted Patient (expect 404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/Patient/{{patientId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "Patient",
+                "{{patientId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"resourceType OperationOutcome\", () => pm.expect(pm.response.json().resourceType).to.eql(\"OperationOutcome\"));"
+                ]
+              }
+            }
+          ],
+          "id": "e905a9c0-8ab1-54cf-a1da-a996f3abccc2"
+        }
+      ],
+      "id": "7d6b9d7a-1cd4-570d-b7ba-4512e6d743c0"
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000/fhir"
+    },
+    {
+      "key": "healthUrl",
+      "value": "http://127.0.0.1:8000/health"
+    },
+    {
+      "key": "runId",
+      "value": ""
+    },
+    {
+      "key": "orgId",
+      "value": ""
+    },
+    {
+      "key": "locationId",
+      "value": ""
+    },
+    {
+      "key": "practitionerId",
+      "value": ""
+    },
+    {
+      "key": "practitionerRoleId",
+      "value": ""
+    },
+    {
+      "key": "patientId",
+      "value": ""
+    },
+    {
+      "key": "encounterId",
+      "value": ""
+    }
+  ]
+}

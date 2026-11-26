@@ -1,0 +1,23 @@
+meta {
+  name: Patient by birthdate (date, year precision) AND identifier
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/Patient?birthdate=1980&identifier=urn:leanfhir:test:mrn|MRN-{{runId}}
+  body: none
+  auth: none
+}
+
+params:query {
+  birthdate: 1980
+  identifier: urn:leanfhir:test:mrn|MRN-{{runId}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.type: eq searchset
+  res.body.total: eq 1
+  res.body.entry[0].resource.id: eq "{{patientId}}"
+}

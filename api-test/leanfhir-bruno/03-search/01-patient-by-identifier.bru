@@ -1,0 +1,24 @@
+meta {
+  name: Patient by identifier (token)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/Patient?identifier=urn:leanfhir:test:mrn|MRN-{{runId}}
+  body: none
+  auth: none
+}
+
+params:query {
+  identifier: urn:leanfhir:test:mrn|MRN-{{runId}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.resourceType: eq Bundle
+  res.body.type: eq searchset
+  res.body.total: eq 1
+  res.body.entry[0].resource.id: eq "{{patientId}}"
+  res.body.entry[0].search.mode: eq match
+}

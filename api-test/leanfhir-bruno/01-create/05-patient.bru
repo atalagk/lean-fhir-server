@@ -1,0 +1,55 @@
+meta {
+  name: Create Patient
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/Patient
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/fhir+json
+}
+
+body:json {
+  {
+    "resourceType": "Patient",
+    "id": "client-supplied-id-must-be-ignored",
+    "identifier": [
+      { "system": "urn:leanfhir:test:mrn", "value": "MRN-{{runId}}" }
+    ],
+    "active": true,
+    "name": [
+      { "family": "Smithson", "given": ["Jane"] }
+    ],
+    "gender": "female",
+    "birthDate": "1980-05-17",
+    "managingOrganization": { "reference": "Organization/{{orgId}}" },
+    "generalPractitioner": [
+      { "reference": "Practitioner/{{practitionerId}}" }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.resourceType: eq Patient
+  res.body.meta.versionId: eq "1"
+  res.body.id: neq client-supplied-id-must-be-ignored
+}
+
+script:post-response {
+  bru.setVar("patientId", res.getBody().id);
+}
+
+tests {
+  test("ETag is version 1", function () {
+    expect(res.getHeader("etag")).to.equal('W/"1"');
+  });
+  test("server-assigned id is a UUID", function () {
+    expect(res.getBody().id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  });
+}

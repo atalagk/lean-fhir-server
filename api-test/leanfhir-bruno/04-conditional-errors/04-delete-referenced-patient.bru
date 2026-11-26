@@ -1,0 +1,16 @@
+meta {
+  name: Delete Patient referenced by Encounter (expect 409)
+  type: http
+  seq: 4
+}
+
+delete {
+  url: {{baseUrl}}/Patient/{{patientId}}
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 409
+  res.body.resourceType: eq OperationOutcome
+}

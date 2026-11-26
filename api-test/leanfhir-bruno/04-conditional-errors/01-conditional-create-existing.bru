@@ -1,0 +1,35 @@
+meta {
+  name: Conditional create, one match (expect 200, nothing written)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/Patient
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/fhir+json
+  If-None-Exist: identifier=urn:leanfhir:test:mrn|MRN-{{runId}}
+}
+
+body:json {
+  {
+    "resourceType": "Patient",
+    "identifier": [
+      { "system": "urn:leanfhir:test:mrn", "value": "MRN-{{runId}}" }
+    ],
+    "name": [
+      { "family": "ShouldNotBeCreated" }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.id: eq "{{patientId}}"
+  res.body.meta.versionId: eq "2"
+  res.body.name[0].family: eq Smithson
+}

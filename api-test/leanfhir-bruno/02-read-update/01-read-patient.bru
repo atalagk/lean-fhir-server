@@ -1,0 +1,28 @@
+meta {
+  name: Read Patient
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/Patient/{{patientId}}
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.resourceType: eq Patient
+  res.body.id: eq "{{patientId}}"
+  res.body.birthDate: eq 1980-05-17
+}
+
+tests {
+  test("content type is FHIR JSON", function () {
+    expect(res.getHeader("content-type")).to.contain("application/fhir+json");
+  });
+  test("ETag and Last-Modified are present", function () {
+    expect(res.getHeader("etag")).to.equal('W/"1"');
+    expect(res.getHeader("last-modified")).to.be.a("string");
+  });
+}

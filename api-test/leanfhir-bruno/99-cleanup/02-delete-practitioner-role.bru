@@ -1,0 +1,15 @@
+meta {
+  name: Delete PractitionerRole
+  type: http
+  seq: 2
+}
+
+delete {
+  url: {{baseUrl}}/PractitionerRole/{{practitionerRoleId}}
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 204
+}

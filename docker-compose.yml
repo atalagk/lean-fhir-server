@@ -6,6 +6,11 @@ services:
       - "${PORT:-8000}:8000"
     volumes:
       - leanfhir-data:/data
+    environment:
+      # Empty = off/derived (SPEC section 6). Set in the shell or in a .env file next to this file,
+      # e.g. CORS_ORIGINS=https://hoppscotch.io docker compose up -d
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      BASE_URL: ${BASE_URL:-}
     restart: unless-stopped
 
 volumes:

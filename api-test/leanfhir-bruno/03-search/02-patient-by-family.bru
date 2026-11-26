@@ -1,0 +1,29 @@
+meta {
+  name: Patient by family (string, starts-with, case-insensitive)
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/Patient?family=smi&_count=200
+  body: none
+  auth: none
+}
+
+params:query {
+  family: smi
+  _count: 200
+}
+
+assert {
+  res.status: eq 200
+  res.body.type: eq searchset
+  res.body.total: gte 1
+}
+
+tests {
+  test("this run's patient is in the results", function () {
+    const ids = (res.getBody().entry || []).map((e) => e.resource.id);
+    expect(ids).to.include(bru.getVar("patientId"));
+  });
+}

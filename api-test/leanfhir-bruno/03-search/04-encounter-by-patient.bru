@@ -1,0 +1,22 @@
+meta {
+  name: Encounter by patient (reference)
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/Encounter?patient=Patient/{{patientId}}
+  body: none
+  auth: none
+}
+
+params:query {
+  patient: Patient/{{patientId}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.type: eq searchset
+  res.body.total: eq 1
+  res.body.entry[0].resource.id: eq "{{encounterId}}"
+}

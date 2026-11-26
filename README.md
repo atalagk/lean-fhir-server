@@ -63,6 +63,16 @@ Configuration is through environment variables only.
 | `LOG_LEVEL` | `INFO` | Log level of the JSON request log |
 | `PORT` | `8000` | Listen port inside the container |
 
+With Docker Compose, `CORS_ORIGINS` and `BASE_URL` are passed through from the shell or from a
+`.env` file next to `docker-compose.yml` (git-ignored). For example, to use the Hoppscotch web app:
+
+```bash
+CORS_ORIGINS=https://hoppscotch.io docker compose up -d     # or put CORS_ORIGINS=... in .env
+```
+
+Allowed origins can use all methods and headers, and can read `ETag`, `Location` and
+`Last-Modified`. Desktop clients (Postman, Bruno, the Hoppscotch desktop app) do not need CORS.
+
 The container runs a single Uvicorn worker, which SQLite requires. PostgreSQL can be selected by
 setting `DATABASE_URL` (`postgresql+psycopg://user:pass@host:5432/leanfhir`); the code is
 dialect-neutral, but **PostgreSQL is untested in v0.1** and there is no compose profile for it.

@@ -1,0 +1,6 @@
+{
+  "version": "1",
+  "name": "LeanFHIR",
+  "type": "collection",
+  "ignore": ["node_modules", ".git"]
+}

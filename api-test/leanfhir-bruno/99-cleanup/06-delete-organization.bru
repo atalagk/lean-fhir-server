@@ -1,0 +1,15 @@
+meta {
+  name: Delete Organization
+  type: http
+  seq: 6
+}
+
+delete {
+  url: {{baseUrl}}/Organization/{{orgId}}
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 204
+}

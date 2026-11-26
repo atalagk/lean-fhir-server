@@ -1,0 +1,38 @@
+meta {
+  name: Create Practitioner
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/Practitioner
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/fhir+json
+}
+
+body:json {
+  {
+    "resourceType": "Practitioner",
+    "identifier": [
+      { "system": "urn:leanfhir:test:prac", "value": "PRAC-{{runId}}" }
+    ],
+    "active": true,
+    "name": [
+      { "family": "Testdoc", "given": ["Alex"], "prefix": ["Dr"] }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.resourceType: eq Practitioner
+  res.body.meta.versionId: eq "1"
+}
+
+script:post-response {
+  bru.setVar("practitionerId", res.getBody().id);
+}
