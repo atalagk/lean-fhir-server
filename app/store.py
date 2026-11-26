@@ -10,8 +10,9 @@ import sqlalchemy as sa
 from sqlalchemy import Connection, Engine
 from sqlalchemy.exc import IntegrityError
 
-from app.db import resource
+from app.db import resource, search_index
 from app.errors import FhirError
+from app.indexer import index_rows
 from app.registry import ResourceDef
 
 ID_RE = re.compile(r"[A-Za-z0-9\-.]{1,64}")
@@ -58,6 +59,17 @@ def _load(conn: Connection, rtype: str, rid: str) -> Stored | None:
     return Stored(row.content, row.version_id, row.last_updated) if row else None
 
 
+def _write_index(conn: Connection, rtype: str, content: dict[str, Any], base: str | None) -> None:
+    conn.execute(
+        sa.delete(search_index).where(
+            search_index.c.resource_type == rtype, search_index.c.resource_id == content["id"]
+        )
+    )
+    rows = index_rows(rtype, content, base)
+    if rows:
+        conn.execute(sa.insert(search_index), rows)
+
+
 def read(engine: Engine, rtype: str, rid: str) -> Stored:
     with engine.connect() as conn:
         found = _load(conn, rtype, rid)
@@ -66,7 +78,9 @@ def read(engine: Engine, rtype: str, rid: str) -> Stored:
     return found
 
 
-def create(engine: Engine, rdef: ResourceDef, rtype: str, body: dict[str, Any]) -> Stored:
+def create(
+    engine: Engine, rdef: ResourceDef, rtype: str, body: dict[str, Any], base: str | None
+) -> Stored:
     rid, ts = str(uuid.uuid4()), now_ts()
     content = _prepare(rdef, body, rid, 1, ts)
     with engine.begin() as conn:
@@ -75,6 +89,7 @@ def create(engine: Engine, rdef: ResourceDef, rtype: str, body: dict[str, Any]) 
                 resource_type=rtype, id=rid, version_id=1, last_updated=ts, content=content
             )
         )
+        _write_index(conn, rtype, content, base)
     return Stored(content, 1, ts)
 
 
@@ -85,6 +100,7 @@ def update(
     rid: str,
     body: dict[str, Any],
     if_match: int | None,
+    base: str | None,
 ) -> tuple[Stored, bool]:
     """Returns (stored, created)."""
     ts = now_ts()
@@ -116,6 +132,7 @@ def update(
                 )
                 if result.rowcount != 1:
                     raise FhirError(409, "conflict", "Concurrent update; retry")
+            _write_index(conn, rtype, content, base)
     except IntegrityError as exc:
         raise FhirError(409, "conflict", "Concurrent create; retry") from exc
     return Stored(content, version, ts), current is None
@@ -126,3 +143,29 @@ def remove(engine: Engine, rtype: str, rid: str) -> None:
         conn.execute(
             sa.delete(resource).where(resource.c.resource_type == rtype, resource.c.id == rid)
         )
+
+
+def reindex(engine: Engine, base: str | None, batch: int = 500) -> int:
+    """Rebuild search_index from stored resources in one transaction. Returns resource count."""
+    count, last = 0, ("", "")
+    with engine.begin() as conn:
+        conn.execute(sa.delete(search_index))
+        while True:
+            rows = conn.execute(
+                sa.select(resource.c.resource_type, resource.c.id, resource.c.content)
+                .where(
+                    sa.or_(
+                        resource.c.resource_type > last[0],
+                        sa.and_(resource.c.resource_type == last[0], resource.c.id > last[1]),
+                    )
+                )
+                .order_by(resource.c.resource_type, resource.c.id)
+                .limit(batch)
+            ).all()
+            if not rows:
+                return count
+            index = [r for row in rows for r in index_rows(row.resource_type, row.content, base)]
+            if index:
+                conn.execute(sa.insert(search_index), index)
+            count += len(rows)
+            last = (rows[-1].resource_type, rows[-1].id)

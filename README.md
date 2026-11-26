@@ -48,3 +48,26 @@ it when running outside Docker.
 - Delete is a hard delete, so a later PUT to the same id starts again at `versionId` "1".
 - Unknown resource types are rejected by route matching (404). Known paths with an unsupported
   method get 405.
+- Search parameter values:
+  - An empty value (`family=`) gets 400. FHIR would ignore it, but this server never ignores a filter silently.
+  - Repeating a control parameter (`_count`, `_offset`, `_sort`, `_format`) gets 400.
+  - `_count` above `MAX_COUNT` is reduced to `MAX_COUNT`, and the paging links show the count actually used.
+  - FHIR escaping in values (`\,`, `\|`, `\\`) is supported.
+- Date search:
+  - A value without a timezone is treated as UTC.
+  - Fractional seconds are cut to milliseconds.
+  - A Period with an open end never matches `eq`, because it isn't fully inside any range. It does
+    match `ge`/`gt`/`le`/`lt` on its open side.
+- Reference search:
+  - A bare id (`subject=123`) matches `{Type}/123` for any of the six supported types, or only the
+    target type for parameters like `patient`.
+  - References in resources to external absolute URLs or `urn:` ids are indexed as written and can
+    only be found by that exact value.
+  - Contained references (`#id`) are not indexed.
+- Token search: a CodeableConcept that has only `text` (no `coding`) is not indexed.
+- `POST /fhir/{type}/_search` needs an `application/x-www-form-urlencoded` body (other types get 415).
+  Parameters in the URL query and in the body are combined.
+- Paging links always include `_count` and `_offset`.
+- Reference normalisation needs the server base URL. When `BASE_URL` is unset, writes use the URL
+  of the incoming request, but `python -m app.cli reindex` has no request, so it cannot normalise
+  absolute references back to this server. **Set `BASE_URL` in any shared deployment.**

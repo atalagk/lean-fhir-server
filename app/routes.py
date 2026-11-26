@@ -5,11 +5,12 @@ import re
 from datetime import UTC, datetime
 from email.utils import format_datetime
 from typing import Annotated, Any
+from urllib.parse import parse_qsl
 
 from fastapi import APIRouter, Depends, Header, Request, Response
 from starlette.convertors import StringConvertor, register_url_convertor
 
-from app import store
+from app import search, store
 from app.errors import FhirError, FhirResponse
 from app.registry import COMMON_PARAMS, REGISTRY, ResourceDef
 
@@ -154,8 +155,9 @@ def read(request: Request, resource_type: str, rid: str) -> FhirResponse:
 @router.post("/{resource_type:rtype}")
 def create(request: Request, resource_type: str, body: Body) -> FhirResponse:
     rdef = check_resource_type(body, resource_type)
-    stored = store.create(request.app.state.engine, rdef, resource_type, body)
-    location = f"{fhir_base(request)}/{resource_type}/{stored.content['id']}"
+    base = fhir_base(request)
+    stored = store.create(request.app.state.engine, rdef, resource_type, body, base)
+    location = f"{base}/{resource_type}/{stored.content['id']}"
     return resource_response(stored, 201, location)
 
 
@@ -172,11 +174,12 @@ def update(
         raise FhirError(400, "invalid", f"Invalid id format: {rid}")
     if body.get("id") != rid:
         raise FhirError(400, "invalid", f"Body id '{body.get('id')}' must equal URL id '{rid}'")
+    base = fhir_base(request)
     stored, created = store.update(
-        request.app.state.engine, rdef, resource_type, rid, body, parse_if_match(if_match)
+        request.app.state.engine, rdef, resource_type, rid, body, parse_if_match(if_match), base
     )
     if created:
-        return resource_response(stored, 201, f"{fhir_base(request)}/{resource_type}/{rid}")
+        return resource_response(stored, 201, f"{base}/{resource_type}/{rid}")
     return resource_response(stored)
 
 
@@ -184,3 +187,36 @@ def update(
 def delete(request: Request, resource_type: str, rid: str) -> Response:
     store.remove(request.app.state.engine, resource_type, rid)
     return Response(status_code=204)
+
+
+def run_search(request: Request, resource_type: str, items: list[tuple[str, str]]) -> FhirResponse:
+    base = fhir_base(request)
+    parsed = search.parse(resource_type, items, request.app.state.settings, base)
+    with request.app.state.engine.connect() as conn:
+        total, resources = search.execute(conn, parsed)
+    return FhirResponse(search.bundle(parsed, total, resources, base))
+
+
+async def form_items(request: Request) -> list[tuple[str, str]]:
+    ctype = _media(request.headers.get("content-type", ""))
+    if ctype and ctype != "application/x-www-form-urlencoded":
+        raise FhirError(415, "not-supported", f"_search requires form-encoded body, got {ctype}")
+    try:
+        body = (await request.body()).decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise FhirError(400, "invalid", "Form body is not valid UTF-8") from exc
+    return [*request.query_params.multi_items(), *parse_qsl(body, keep_blank_values=True)]
+
+
+@router.get("/{resource_type:rtype}")
+def search_get(request: Request, resource_type: str) -> FhirResponse:
+    return run_search(request, resource_type, request.query_params.multi_items())
+
+
+@router.post("/{resource_type:rtype}/_search")
+def search_post(
+    request: Request,
+    resource_type: str,
+    items: Annotated[list[tuple[str, str]], Depends(form_items)],
+) -> FhirResponse:
+    return run_search(request, resource_type, items)
