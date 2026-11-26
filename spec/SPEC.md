@@ -457,9 +457,34 @@ Use the FHIR logical id (not a business identifier such as an NHI/MRN) as the li
 | `COMPOSITION.composer` (`PARTY_IDENTIFIED.external_ref`) | `Practitioner/{id}` |
 | `EVENT_CONTEXT.health_care_facility` | `Organization/{id}` |
 | `EVENT_CONTEXT.location` / participations | `Location/{id}` / `Practitioner/{id}` |
-| Encounter link: an identifier element in the template's context (`other_context`) or `FEEDER_AUDIT` item id | `Encounter/{id}` |
+| Encounter links: repeating identifier in `EVENT_CONTEXT.other_context` (see below) | `Encounter/{id}` (0..*) |
 
-Typical sequence: conditional-create Patient by identifier (F3) → create EHR with `external_ref` → create Encounter → commit compositions carrying the Encounter id.
+**Composition ↔ Encounter (many-to-many)** — a composition may be anchored to zero, one or several encounters, and an encounter to many compositions. The link is held on the openEHR side only; LeanFHIR never references compositions and needs no server feature for this.
+
+- In each template that needs it, add to `context/other_context` a repeating (0..*) ELEMENT with a `DV_IDENTIFIER` value, one occurrence per linked Encounter:
+  - `id` = `Encounter.id` (FHIR logical id)
+  - `type` = `Encounter`
+  - `issuer` / `assigner` = the LeanFHIR namespace used for the Patient link (e.g. `leanfhir-dev`)
+- Do not use `FEEDER_AUDIT.originating_system_item_ids` (its meaning is feeder-system provenance) or `LOCATABLE.links` (`LINK.target` is a `DV_EHR_URI`, not an external URL) for this.
+- Where encounters form a hierarchy, `Encounter.partOf` can additionally be used on the FHIR side (searchable via `part-of`); this complements, not replaces, the list on the composition.
+
+Resolve all encounters of a composition in one call (comma = OR on `_id`, section 2.4):
+
+```http
+GET /fhir/Encounter?_id=<id1>,<id2>,<id3>
+```
+
+Find compositions anchored to an encounter (AQL; node ids are template-specific placeholders):
+
+```sql
+SELECT c/uid/value
+FROM EHR e CONTAINS COMPOSITION c
+WHERE c/context/other_context[at0001]/items[at0002]/value/id = '<Encounter.id>'
+```
+
+Because the link is one-directional and LeanFHIR is standalone, there is no cross-system integrity: deleting an Encounter in LeanFHIR does not touch compositions that cite it. The app must handle unresolved ids (an id missing from the `_id` search result).
+
+Typical sequence: conditional-create Patient by identifier (F3) → create EHR with `external_ref` → create Encounter(s) → commit compositions carrying the list of Encounter ids.
 
 ---
 
