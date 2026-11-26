@@ -13,7 +13,8 @@ from sqlalchemy.exc import IntegrityError
 from app.db import resource, search_index
 from app.errors import FhirError
 from app.indexer import index_rows
-from app.registry import ResourceDef
+from app.registry import REGISTRY, ResourceDef
+from app.search import Search, execute
 
 ID_RE = re.compile(r"[A-Za-z0-9\-.]{1,64}")
 
@@ -23,6 +24,12 @@ class Stored:
     content: dict[str, Any]
     version_id: int
     last_updated: str
+
+
+@dataclass(frozen=True)
+class WriteOptions:
+    base: str | None  # server base URL for reference normalisation
+    enforce_references: bool = True
 
 
 def now_ts() -> str:
@@ -59,13 +66,31 @@ def _load(conn: Connection, rtype: str, rid: str) -> Stored | None:
     return Stored(row.content, row.version_id, row.last_updated) if row else None
 
 
-def _write_index(conn: Connection, rtype: str, content: dict[str, Any], base: str | None) -> None:
+def _check_references(conn: Connection, rtype: str, rid: str, rows: list[dict]) -> None:
+    """F9: indexed local references to supported types must resolve (self-references allowed)."""
+    targets = set()
+    for row in rows:
+        target_type, _, target_id = (row["reference"] or "").partition("/")
+        if target_type in REGISTRY and target_id and (target_type, target_id) != (rtype, rid):
+            targets.add((target_type, target_id))
+    if not targets:
+        return
+    key = sa.tuple_(resource.c.resource_type, resource.c.id)
+    found = {tuple(r) for r in conn.execute(sa.select(*key.clauses).where(key.in_(targets)))}
+    missing = sorted(f"{t}/{i}" for t, i in targets - found)
+    if missing:
+        raise FhirError(422, "processing", f"Unresolved reference(s): {', '.join(missing)}")
+
+
+def _write_index(conn: Connection, rtype: str, content: dict[str, Any], opts: WriteOptions) -> None:
+    rows = index_rows(rtype, content, opts.base)
+    if opts.enforce_references:
+        _check_references(conn, rtype, content["id"], rows)
     conn.execute(
         sa.delete(search_index).where(
             search_index.c.resource_type == rtype, search_index.c.resource_id == content["id"]
         )
     )
-    rows = index_rows(rtype, content, base)
     if rows:
         conn.execute(sa.insert(search_index), rows)
 
@@ -79,18 +104,33 @@ def read(engine: Engine, rtype: str, rid: str) -> Stored:
 
 
 def create(
-    engine: Engine, rdef: ResourceDef, rtype: str, body: dict[str, Any], base: str | None
-) -> Stored:
+    engine: Engine,
+    rdef: ResourceDef,
+    rtype: str,
+    body: dict[str, Any],
+    opts: WriteOptions,
+    condition: Search | None = None,
+) -> tuple[Stored, bool]:
+    """Returns (stored, created). With `condition` (If-None-Exist): one match -> existing."""
     rid, ts = str(uuid.uuid4()), now_ts()
     content = _prepare(rdef, body, rid, 1, ts)
     with engine.begin() as conn:
+        if condition is not None:
+            condition.count, condition.offset = 2, 0
+            total, matches = execute(conn, condition)
+            if total > 1:
+                raise FhirError(412, "duplicate", f"If-None-Exist matched {total} resources")
+            if total == 1:
+                existing = _load(conn, rtype, matches[0]["id"])
+                assert existing is not None
+                return existing, False
         conn.execute(
             sa.insert(resource).values(
                 resource_type=rtype, id=rid, version_id=1, last_updated=ts, content=content
             )
         )
-        _write_index(conn, rtype, content, base)
-    return Stored(content, 1, ts)
+        _write_index(conn, rtype, content, opts)
+    return Stored(content, 1, ts), True
 
 
 def update(
@@ -100,7 +140,7 @@ def update(
     rid: str,
     body: dict[str, Any],
     if_match: int | None,
-    base: str | None,
+    opts: WriteOptions,
 ) -> tuple[Stored, bool]:
     """Returns (stored, created)."""
     ts = now_ts()
@@ -132,14 +172,29 @@ def update(
                 )
                 if result.rowcount != 1:
                     raise FhirError(409, "conflict", "Concurrent update; retry")
-            _write_index(conn, rtype, content, base)
+            _write_index(conn, rtype, content, opts)
     except IntegrityError as exc:
         raise FhirError(409, "conflict", "Concurrent create; retry") from exc
     return Stored(content, version, ts), current is None
 
 
-def remove(engine: Engine, rtype: str, rid: str) -> None:
+def remove(engine: Engine, rtype: str, rid: str, enforce_references: bool = True) -> None:
+    si = search_index.c
     with engine.begin() as conn:
+        if enforce_references:
+            referrers = conn.execute(
+                sa.select(si.resource_type, si.resource_id)
+                .where(
+                    si.reference == f"{rtype}/{rid}",
+                    sa.not_(sa.and_(si.resource_type == rtype, si.resource_id == rid)),
+                )
+                .distinct()
+                .order_by(si.resource_type, si.resource_id)
+                .limit(5)
+            ).all()
+            if referrers:
+                names = ", ".join(f"{t}/{i}" for t, i in referrers)
+                raise FhirError(409, "conflict", f"{rtype}/{rid} is referenced by {names}")
         conn.execute(
             sa.delete(resource).where(resource.c.resource_type == rtype, resource.c.id == rid)
         )

@@ -97,6 +97,7 @@ def test_date_timezone_handling(client: TestClient) -> None:
 
 def test_reference_forms(client: TestClient) -> None:
     p = create(client, "Patient", rid="p1")
+    create(client, "Patient", rid="p2")
     e = create(client, "Encounter", {"subject": {"reference": "Patient/p1"}})
     other = create(client, "Encounter", {"subject": {"reference": "Patient/p2"}})
     for value in ("Patient/p1", "p1", "http://testserver/fhir/Patient/p1"):
@@ -106,6 +107,7 @@ def test_reference_forms(client: TestClient) -> None:
 
 
 def test_absolute_reference_in_resource_is_normalised(client: TestClient) -> None:
+    create(client, "Patient", rid="p1")
     e = create(client, "Encounter", {"subject": {"reference": "http://testserver/fhir/Patient/p1"}})
     assert search_ids(client, "Encounter", {"patient": "Patient/p1"}) == {e}
 

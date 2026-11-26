@@ -152,12 +152,31 @@ def read(request: Request, resource_type: str, rid: str) -> FhirResponse:
     return resource_response(store.read(request.app.state.engine, resource_type, rid))
 
 
+def write_options(request: Request) -> store.WriteOptions:
+    return store.WriteOptions(fhir_base(request), request.app.state.settings.enforce_references)
+
+
 @router.post("/{resource_type:rtype}")
-def create(request: Request, resource_type: str, body: Body) -> FhirResponse:
+def create(
+    request: Request,
+    resource_type: str,
+    body: Body,
+    if_none_exist: Annotated[str | None, Header()] = None,
+) -> FhirResponse:
     rdef = check_resource_type(body, resource_type)
-    base = fhir_base(request)
-    stored = store.create(request.app.state.engine, rdef, resource_type, body, base)
-    location = f"{base}/{resource_type}/{stored.content['id']}"
+    opts = write_options(request)
+    condition = None
+    if if_none_exist is not None:
+        items = parse_qsl(if_none_exist.strip().lstrip("?"), keep_blank_values=True)
+        if not items:
+            raise FhirError(400, "invalid", "If-None-Exist must contain a search query")
+        condition = search.parse(resource_type, items, request.app.state.settings, opts.base)
+    stored, created = store.create(
+        request.app.state.engine, rdef, resource_type, body, opts, condition
+    )
+    if not created:
+        return resource_response(stored)
+    location = f"{opts.base}/{resource_type}/{stored.content['id']}"
     return resource_response(stored, 201, location)
 
 
@@ -174,18 +193,20 @@ def update(
         raise FhirError(400, "invalid", f"Invalid id format: {rid}")
     if body.get("id") != rid:
         raise FhirError(400, "invalid", f"Body id '{body.get('id')}' must equal URL id '{rid}'")
-    base = fhir_base(request)
+    opts = write_options(request)
     stored, created = store.update(
-        request.app.state.engine, rdef, resource_type, rid, body, parse_if_match(if_match), base
+        request.app.state.engine, rdef, resource_type, rid, body, parse_if_match(if_match), opts
     )
     if created:
-        return resource_response(stored, 201, f"{base}/{resource_type}/{rid}")
+        return resource_response(stored, 201, f"{opts.base}/{resource_type}/{rid}")
     return resource_response(stored)
 
 
 @router.delete("/{resource_type:rtype}/{rid}", status_code=204)
 def delete(request: Request, resource_type: str, rid: str) -> Response:
-    store.remove(request.app.state.engine, resource_type, rid)
+    store.remove(
+        request.app.state.engine, resource_type, rid, request.app.state.settings.enforce_references
+    )
     return Response(status_code=204)
 
 

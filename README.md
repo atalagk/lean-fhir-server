@@ -71,3 +71,17 @@ it when running outside Docker.
 - Reference normalisation needs the server base URL. When `BASE_URL` is unset, writes use the URL
   of the incoming request, but `python -m app.cli reindex` has no request, so it cannot normalise
   absolute references back to this server. **Set `BASE_URL` in any shared deployment.**
+- Conditional create (`If-None-Exist`):
+  - One match returns 200 with the existing resource, `ETag` and `Last-Modified`, and no `Location`.
+  - More than one match gets 412 with issue code `duplicate`.
+  - The query goes through the normal search parser (unknown parameters → 400). A leading `?` is
+    allowed, an empty header gets 400, and paging parameters are ignored.
+- Referential integrity:
+  - An unresolved reference gets 422 with issue code `processing`, listing every unresolved target.
+  - A delete blocked by inbound references gets 409, naming up to five referring resources.
+  - A resource may reference itself; that neither fails the check nor blocks its own deletion.
+  - `ENFORCE_REFERENCES=false` turns off both the write check and the delete check.
+- Concurrency: the conditional-create search and the reference checks run inside the write
+  transaction, but concurrent requests are not serialised. Two simultaneous conditional creates
+  can both create, and a delete racing a create can leave a dangling reference. This is accepted
+  for the PoC scale envelope (N3).
