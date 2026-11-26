@@ -9,7 +9,8 @@ It is a smoke test, not the section 9 acceptance matrix (that stays in pytest).
 
 1. Start the server in WSL2: `docker compose up -d` from the repo root.
 2. In the Windows Bruno app: **Open Collection** and enter this folder's WSL path:
-   `\\wsl.localhost\Ubuntu\home\koray\projects\lean-fhir-server\api-test\leanfhir-bruno`
+   `\\wsl.localhost\<distro>\<path-to-repo>\api-test\leanfhir-bruno`, e.g.
+   `\\wsl.localhost\Ubuntu\home\<user>\lean-fhir-server\api-test\leanfhir-bruno`
    (older Windows builds: `\\wsl$\Ubuntu\...`).
 3. Select the environment `local` (top right), then run the collection with the Runner, or run
    requests one by one in folder order.

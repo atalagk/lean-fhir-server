@@ -13,7 +13,8 @@ the section 9 acceptance matrix, which stays in pytest. Synthetic data only.
 
 1. Start the server in WSL2: `docker compose up -d` from the repo root.
 2. In Postman: **Import**, then select both JSON files. From Windows the folder is:
-   `\\wsl.localhost\Ubuntu\home\koray\projects\lean-fhir-server\api-test\leanfhir-postman`
+   `\\wsl.localhost\<distro>\<path-to-repo>\api-test\leanfhir-postman`, e.g.
+   `\\wsl.localhost\Ubuntu\home\<user>\lean-fhir-server\api-test\leanfhir-postman`
    (older Windows builds: `\\wsl$\Ubuntu\...`).
 3. Select the environment **LeanFHIR local** (top right).
 4. Right-click the collection, choose **Run collection**, and keep the folder order. To keep the

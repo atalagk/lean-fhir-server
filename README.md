@@ -396,3 +396,7 @@ Profile or terminology validation; `_history`/vread; patch; conditional update o
 transaction/batch Bundles; `$operations`; `_include`/`_revinclude`; chained search; `_has`; `:missing`;
 `:not`; `_filter`; XML; GraphQL; Subscriptions; SMART on FHIR; authentication; any UI. See SPEC
 section 1.5.
+
+## License
+
+[MIT](LICENSE) © 2026 Koray Atalag
