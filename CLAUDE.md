@@ -40,11 +40,10 @@ source .venv/bin/activate               # every shell
 pip install -e ".[dev]"                 # local install
 DATABASE_URL=sqlite:///./leanfhir.db uvicorn app.main:app --reload   # run locally (SQLite)
 pytest                                  # tests (temp SQLite)
-DATABASE_URL=postgresql+psycopg://leanfhir:leanfhir@localhost:5432/leanfhir pytest   # tests on PostgreSQL
 pytest --cov=app --cov-report=term-missing
 ruff check . && ruff format .
 docker compose up --build               # container, SQLite
-docker compose --profile postgres up --build
+docker build --target test -t leanfhir:test . && docker run --rm leanfhir:test   # tests in container
 python -m app.cli reindex               # rebuild search index
 ```
 

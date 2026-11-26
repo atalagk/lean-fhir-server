@@ -194,7 +194,7 @@ Targets are PoC-grade and indicative, not SLAs.
 | N2 | Footprint | Image ≤ 300 MB (python:3.12-slim base). Idle RSS ≤ 200 MB. Cold start ≤ 5 s. |
 | N3 | Scale envelope | Designed for ≤ 100k resources total and a handful of concurrent users. Indicative on a laptop at that volume: read p95 < 50 ms, indexed search p95 < 300 ms. No load-test deliverable; one smoke benchmark script is optional. |
 | N4 | Concurrency | SQLite: WAL mode, `busy_timeout` 5 s, single Uvicorn worker process. PostgreSQL: default pool, workers configurable. Optimistic locking via `If-Match`. |
-| N5 | Portability | Identical behaviour on SQLite and PostgreSQL. No dialect-specific SQL or JSON operators; all search goes through the index table. The test suite runs against both. |
+| N5 | Portability | Identical behaviour on SQLite and PostgreSQL. No dialect-specific SQL or JSON operators; all search goes through the index table. The test suite runs against SQLite in v0.1; running it against PostgreSQL is deferred (see M5, section 10). |
 | N6 | Configuration | Environment variables only (section 6). Sensible defaults for all. |
 | N7 | Security | No auth (D4). Must be documented prominently in README: run only on a trusted network / behind a gateway; no real patient data. Container runs as non-root. CORS disabled unless configured. No stack traces in responses. All SQL parameterised via SQLAlchemy. |
 | N8 | Extensibility seams | (a) One FastAPI dependency `require_auth` (no-op) applied to the FHIR router, so API-key/OIDC can be added in one place. (b) Adding a resource type or search parameter = registry entry only (5.2). No other seams. |
@@ -318,7 +318,7 @@ leanfhir/
 │   ├── fixtures/      # minimal + rich example JSON per resource type
 │   └── test_*.py      # crud, validation, search_{token,string,date,reference}, paging, conditional, references, metadata
 ├── Dockerfile
-├── docker-compose.yml # service `leanfhir`; profile `postgres` adds `db` and overrides DATABASE_URL
+├── docker-compose.yml # service `leanfhir` (postgres profile deferred, see M5)
 ├── pyproject.toml
 ├── README.md
 └── SPEC.md            # this document
@@ -402,7 +402,7 @@ A single `FhirError(status, issue_code, diagnostics)` exception and one handler 
 | `LOG_LEVEL` | `INFO` | |
 | `PORT` | `8000` | Container listen port |
 
-**Compose**: default profile runs `leanfhir` only with volume `leanfhir-data:/data`. `docker compose --profile postgres up` adds `postgres:16-alpine` and sets `DATABASE_URL` accordingly. Container healthcheck calls `/health`.
+**Compose**: default profile runs `leanfhir` only with volume `leanfhir-data:/data`. Container healthcheck calls `/health`. *(Deferred from v0.1: a `postgres` profile adding `postgres:16-alpine`. PostgreSQL remains selectable by setting `DATABASE_URL`, but is untested in v0.1.)*
 
 **Runtime dependencies** (pin exact versions at build time): `fastapi`, `uvicorn`, `sqlalchemy`, `fhir.resources`, `pydantic-settings`, `psycopg[binary]`. Dev: `pytest`, `httpx`, `pytest-cov`, `ruff`.
 
@@ -530,9 +530,10 @@ Build in order; each milestone ends with its tests passing on SQLite.
   - Reference to unsupported type or external absolute URL is accepted.
   - DELETE Patient referenced by an Encounter → 409; after deleting the Encounter → 204.
 
-### M5 — PostgreSQL parity, docs, polish
-- Compose `postgres` profile; run the full suite with `DATABASE_URL` pointing at PostgreSQL; README per N13; R4B diff check (5.3); non-root container; ruff clean; coverage ≥ 85%.
-- **Accept:** entire test suite green on both SQLite and PostgreSQL; image size and startup within N2; README complete including sections 7 and 8.
+### M5 — Docs, polish
+- README per N13; R4B diff check (5.3); non-root container; ruff clean; coverage ≥ 85%; test suite runnable in the container (N11).
+- **Accept:** entire test suite green on SQLite; image size and startup within N2; README complete including sections 7 and 8.
+- *Deferred (decision 2026-11-27):* the compose `postgres` profile and running the suite against PostgreSQL. The code stays dialect-neutral (N5) so this can be added later without application changes.
 
 ### Instructions for the implementing agent
 - Implement exactly this scope; section 1.5 lists what not to build. Where the spec is silent, choose the simplest behaviour consistent with FHIR R4 and note it in the README under "Known deviations" or "Implementation notes".
@@ -551,6 +552,7 @@ Build in order; each milestone ends with its tests passing on SQLite.
 | `_include` for Encounter → Patient | `search.py` post-processing using stored references |
 | Transaction Bundle for seeding | New route reusing `store` within one transaction |
 | History / vread | Add `resource_history` table written in `store` |
+| PostgreSQL parity (deferred from M5) | Compose `postgres` profile; CI run of the suite with `DATABASE_URL` set to PostgreSQL |
 
 ## References
 
