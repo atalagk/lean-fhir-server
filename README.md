@@ -48,6 +48,21 @@ ruff check . && ruff format --check .
 docker build --target test -t leanfhir:test . && docker run --rm leanfhir:test
 ```
 
+### API test collections
+
+`api-test/` holds an end-to-end smoke test of a running server for API clients. It has the same 27
+requests in two formats, and each folder's README explains how to run it (including from Windows
+against WSL2):
+
+| Folder | Client | CLI |
+|---|---|---|
+| [`api-test/leanfhir-bruno`](api-test/leanfhir-bruno) | Bruno: *Open Collection* on the folder | `bru run -r --env local` |
+| [`api-test/leanfhir-postman`](api-test/leanfhir-postman) | Postman: *Import* both JSON files | `npx newman run LeanFHIR.postman_collection.json -e LeanFHIR-local.postman_environment.json` |
+
+A run creates one of each resource type, then exercises read, update with `If-Match`, search,
+conditional create and the error cases. It ends by deleting what it created. Both collections
+target `http://127.0.0.1:8000`. They complement the pytest suite and do not replace it.
+
 ## Configuration
 
 Configuration is through environment variables only.
